@@ -1,0 +1,28 @@
+dns:
+- domain: vu
+  parent: .
+- domain: vk.vu
+  parent: vu
+- domain: r.vk.vu
+  parent: vk.vu
+  diversion:
+  - source: 101.231.252.114
+    name: intel
+    a:
+      endpoints:
+      - name: main
+        weight: 5
+        address: 47.95.243.114
+      - name: back
+        weight: 1
+        address: 12.31.514.12
+  - source: 0.0.0.0/0
+    name: default
+    a:
+      endpoints:
+      - name: main
+        weight: 5
+        address: 47.95.243.114
+      - name: back
+        weight: 1
+        address: 12.31.114.12
