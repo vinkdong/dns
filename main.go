@@ -15,9 +15,10 @@ import (
 var (
 	ttl    = flag.Uint("ttl", 600, "time to live")
 	config = flag.String("conf", "", "server config file")
-	proxy  = flag.String("proxy,", "8.8.8.8", "default proxy dns server")
+	proxy  = flag.String("proxy", "8.8.8.8", "default proxy dns server")
 	debug  = flag.Bool("debug", false, "debug model")
 	base   = VDns{Domain: ""}
+	client = dns.Client{Net: "udp"}
 )
 
 type Config struct {
@@ -196,9 +197,6 @@ func (c *Config) getDNS(domain string) *VDns {
 		nextDns := crDns.getChild(sp[i])
 		if nextDns == nil {
 			nextDns = crDns.getChild("*")
-			if nextDns == nil {
-				log.Errorf("cant get domain %s", domain)
-			}
 			return nextDns
 		}
 		crDns = nextDns
@@ -207,6 +205,7 @@ func (c *Config) getDNS(domain string) *VDns {
 }
 
 func ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	fmt.Println(r.Question)
 	domain := strings.ToLower(r.Question[0].Name)
 
 	ip, _, _ := net.SplitHostPort(w.RemoteAddr().String())
@@ -221,8 +220,14 @@ func ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	vdns := c.getDNS(domain)
 	if vdns == nil {
-		msg.SetRcode(r, 2)
-		w.WriteMsg(msg)
+		msgx := getProxyMsg(r)
+		if msgx != nil{
+			w.WriteMsg(msgx)
+		}else {
+			msg.SetRcode(r, 2)
+			w.WriteMsg(msg)
+			log.Errorf("cant get domain %s", domain)
+		}
 		return
 	}
 
@@ -252,4 +257,15 @@ func ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		w.WriteMsg(msg)
 	}
 	w.WriteMsg(msg)
+}
+
+func getProxyMsg(r *dns.Msg) *dns.Msg {
+	if msg, _ , err := client.Exchange(r,*proxy+":53"); err == nil{
+		msg.Question[0].Name = strings.ToLower(msg.Question[0].Name)
+		for i := 0; i < len(msg.Answer); i++ {
+			msg.Answer[i].Header().Name = strings.ToLower(msg.Answer[i].Header().Name)
+		}
+		return msg
+	}
+	return nil
 }
